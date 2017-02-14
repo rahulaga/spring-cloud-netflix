@@ -35,15 +35,17 @@ import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 import javax.servlet.http.HttpServletRequest;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.http.Header;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
 import org.apache.http.ProtocolException;
-import org.apache.http.client.HttpClient;
 import org.apache.http.client.RedirectStrategy;
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
+import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpPatch;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.HttpPut;
@@ -79,10 +81,21 @@ import com.netflix.zuul.ZuulFilter;
 import com.netflix.zuul.constants.ZuulConstants;
 import com.netflix.zuul.context.RequestContext;
 
-import lombok.extern.apachecommons.CommonsLog;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.HTTPS_SCHEME;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.HTTP_SCHEME;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.ROUTE_TYPE;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.SIMPLE_HOST_ROUTING_FILTER_ORDER;
 
-@CommonsLog
+/**
+ * Route {@link ZuulFilter} that sends requests to predetermined URLs via apache {@link HttpClient}.
+ * URLs are found in {@link RequestContext#getRouteHost()}.
+ *
+ * @author Spencer Gibb
+ * @author Dave Syer
+ */
 public class SimpleHostRoutingFilter extends ZuulFilter {
+
+	private static final Log log = LogFactory.getLog(SimpleHostRoutingFilter.class);
 
 	private static final DynamicIntProperty SOCKET_TIMEOUT = DynamicPropertyFactory
 			.getInstance()
@@ -147,12 +160,12 @@ public class SimpleHostRoutingFilter extends ZuulFilter {
 
 	@Override
 	public String filterType() {
-		return "route";
+		return ROUTE_TYPE;
 	}
 
 	@Override
 	public int filterOrder() {
-		return 100;
+		return SIMPLE_HOST_ROUTING_FILTER_ORDER;
 	}
 
 	@Override
@@ -179,8 +192,8 @@ public class SimpleHostRoutingFilter extends ZuulFilter {
 		this.helper.addIgnoredHeaders();
 
 		try {
-			HttpResponse response = forward(this.httpClient, verb, uri, request, headers,
-					params, requestEntity);
+			CloseableHttpResponse response = forward(this.httpClient, verb, uri, request,
+					headers, params, requestEntity);
 			setResponse(response);
 		}
 		catch (Exception ex) {
@@ -211,13 +224,13 @@ public class SimpleHostRoutingFilter extends ZuulFilter {
 
 			RegistryBuilder<ConnectionSocketFactory> registryBuilder = RegistryBuilder
 					.<ConnectionSocketFactory> create()
-					.register("http", PlainConnectionSocketFactory.INSTANCE);
+					.register(HTTP_SCHEME, PlainConnectionSocketFactory.INSTANCE);
 			if (this.sslHostnameValidationEnabled) {
-				registryBuilder.register("https",
+				registryBuilder.register(HTTPS_SCHEME,
 						new SSLConnectionSocketFactory(sslContext));
 			}
 			else {
-				registryBuilder.register("https", new SSLConnectionSocketFactory(
+				registryBuilder.register(HTTPS_SCHEME, new SSLConnectionSocketFactory(
 						sslContext, NoopHostnameVerifier.INSTANCE));
 			}
 			final Registry<ConnectionSocketFactory> registry = registryBuilder.build();
@@ -265,8 +278,8 @@ public class SimpleHostRoutingFilter extends ZuulFilter {
 				}).build();
 	}
 
-	private HttpResponse forward(HttpClient httpclient, String verb, String uri,
-			HttpServletRequest request, MultiValueMap<String, String> headers,
+	private CloseableHttpResponse forward(CloseableHttpClient httpclient, String verb,
+			String uri, HttpServletRequest request, MultiValueMap<String, String> headers,
 			MultiValueMap<String, String> params, InputStream requestEntity)
 			throws Exception {
 		Map<String, Object> info = this.helper.debug(verb, uri, headers, params,
@@ -275,15 +288,21 @@ public class SimpleHostRoutingFilter extends ZuulFilter {
 		HttpHost httpHost = getHttpHost(host);
 		uri = StringUtils.cleanPath((host.getPath() + uri).replaceAll("/{2,}", "/"));
 		int contentLength = request.getContentLength();
-		InputStreamEntity entity = new InputStreamEntity(requestEntity, contentLength,
-				request.getContentType() != null
-						? ContentType.create(request.getContentType()) : null);
+
+		ContentType contentType = null;
+
+		if (request.getContentType() != null) {
+			contentType = ContentType.parse(request.getContentType());
+		}
+
+		InputStreamEntity entity = new InputStreamEntity(requestEntity, contentLength, contentType);
 
 		HttpRequest httpRequest = buildHttpRequest(verb, uri, entity, headers, params, request);
 		try {
 			log.debug(httpHost.getHostName() + " " + httpHost.getPort() + " "
 					+ httpHost.getSchemeName());
-			HttpResponse zuulResponse = forwardRequest(httpclient, httpHost, httpRequest);
+			CloseableHttpResponse zuulResponse = forwardRequest(httpclient, httpHost,
+					httpRequest);
 			this.helper.appendDebug(info, zuulResponse.getStatusLine().getStatusCode(),
 					revertHeaders(zuulResponse.getAllHeaders()));
 			return zuulResponse;
@@ -361,8 +380,8 @@ public class SimpleHostRoutingFilter extends ZuulFilter {
 		return list.toArray(new BasicHeader[0]);
 	}
 
-	private HttpResponse forwardRequest(HttpClient httpclient, HttpHost httpHost,
-			HttpRequest httpRequest) throws IOException {
+	private CloseableHttpResponse forwardRequest(CloseableHttpClient httpclient,
+			HttpHost httpHost, HttpRequest httpRequest) throws IOException {
 		return httpclient.execute(httpHost, httpRequest);
 	}
 
@@ -389,6 +408,7 @@ public class SimpleHostRoutingFilter extends ZuulFilter {
 	}
 
 	private void setResponse(HttpResponse response) throws IOException {
+		RequestContext.getCurrentContext().set("zuulResponse", response);
 		this.helper.setResponse(response.getStatusLine().getStatusCode(),
 				response.getEntity() == null ? null : response.getEntity().getContent(),
 				revertHeaders(response.getAllHeaders()));

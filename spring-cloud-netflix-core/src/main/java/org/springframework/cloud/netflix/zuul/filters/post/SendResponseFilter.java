@@ -16,16 +16,20 @@
 
 package org.springframework.cloud.netflix.zuul.filters.post;
 
-import lombok.extern.apachecommons.CommonsLog;
-
 import java.io.ByteArrayInputStream;
+import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
 import java.util.zip.GZIPInputStream;
+
 import javax.servlet.http.HttpServletResponse;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.springframework.util.ReflectionUtils;
+
 import com.netflix.config.DynamicBooleanProperty;
 import com.netflix.config.DynamicIntProperty;
 import com.netflix.config.DynamicPropertyFactory;
@@ -36,11 +40,21 @@ import com.netflix.zuul.constants.ZuulHeaders;
 import com.netflix.zuul.context.RequestContext;
 import com.netflix.zuul.util.HTTPRequestUtils;
 
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.POST_TYPE;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.ROUTING_DEBUG_KEY;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.SEND_RESPONSE_FILTER_ORDER;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.X_ZUUL_DEBUG_HEADER;
+
 /**
+ * Post {@link ZuulFilter} that writes responses from proxied requests to the current response.
+ *
  * @author Spencer Gibb
+ * @author Dave Syer
+ * @author Ryan Baxter
  */
-@CommonsLog
 public class SendResponseFilter extends ZuulFilter {
+
+	private static final Log log = LogFactory.getLog(SendResponseFilter.class);
 
 	private static DynamicBooleanProperty INCLUDE_DEBUG_HEADER = DynamicPropertyFactory
 			.getInstance()
@@ -74,12 +88,12 @@ public class SendResponseFilter extends ZuulFilter {
 	
 	@Override
 	public String filterType() {
-		return "post";
+		return POST_TYPE;
 	}
 
 	@Override
 	public int filterOrder() {
-		return 1000;
+		return SEND_RESPONSE_FILTER_ORDER;
 	}
 
 	@Override
@@ -171,58 +185,61 @@ public class SendResponseFilter extends ZuulFilter {
 			}
 		}
 		finally {
+			/**
+			* Closing the wrapping InputStream itself has no effect on closing the underlying tcp connection since it's a wrapped stream. I guess for http
+			* keep-alive. When closing the wrapping stream it tries to reach the end of the current request, which is impossible for infinite http streams. So
+			* instead of closing the InputStream we close the HTTP response.
+			*
+			* @author Johannes Edmeier
+			*/
 			try {
-				if (is != null) {
-					is.close();
+				Object zuulResponse = RequestContext.getCurrentContext()
+						.get("zuulResponse");
+				if (zuulResponse instanceof Closeable) {
+					((Closeable) zuulResponse).close();
 				}
 				outStream.flush();
 				// The container will close the stream for us
 			}
 			catch (IOException ex) {
+			log.warn("Error while sending response to client: " + ex.getMessage());
 			}
 		}
 	}
 
 	private void writeResponse(InputStream zin, OutputStream out) throws Exception {
-		try {
-			byte[] bytes = buffers.get();
-			int bytesRead = -1;
-			while ((bytesRead = zin.read(bytes)) != -1) {
-				out.write(bytes, 0, bytesRead);
-			}
-		}
-		catch(IOException ioe) {
-			log.warn("Error while sending response to client: "+ioe.getMessage());
+		byte[] bytes = buffers.get();
+		int bytesRead = -1;
+		while ((bytesRead = zin.read(bytes)) != -1) {
+			out.write(bytes, 0, bytesRead);
 		}
 	}
 
 	private void addResponseHeaders() {
 		RequestContext context = RequestContext.getCurrentContext();
 		HttpServletResponse servletResponse = context.getResponse();
-		List<Pair<String, String>> zuulResponseHeaders = context.getZuulResponseHeaders();
-		@SuppressWarnings("unchecked")
-		List<String> rd = (List<String>) RequestContext.getCurrentContext()
-				.get("routingDebug");
-		if (rd != null) {
-			StringBuilder debugHeader = new StringBuilder();
-			for (String it : rd) {
-				debugHeader.append("[[[" + it + "]]]");
-			}
-			if (INCLUDE_DEBUG_HEADER.get()) {
-				servletResponse.addHeader("X-Zuul-Debug-Header", debugHeader.toString());
+		if (INCLUDE_DEBUG_HEADER.get()) {
+			@SuppressWarnings("unchecked")
+			List<String> rd = (List<String>) context.get(ROUTING_DEBUG_KEY);
+			if (rd != null) {
+				StringBuilder debugHeader = new StringBuilder();
+				for (String it : rd) {
+					debugHeader.append("[[[" + it + "]]]");
+				}
+				servletResponse.addHeader(X_ZUUL_DEBUG_HEADER, debugHeader.toString());
 			}
 		}
+		List<Pair<String, String>> zuulResponseHeaders = context.getZuulResponseHeaders();
 		if (zuulResponseHeaders != null) {
 			for (Pair<String, String> it : zuulResponseHeaders) {
 				servletResponse.addHeader(it.first(), it.second());
 			}
 		}
-		RequestContext ctx = RequestContext.getCurrentContext();
-		Long contentLength = ctx.getOriginContentLength();
 		// Only inserts Content-Length if origin provides it and origin response is not
 		// gzipped
 		if (SET_CONTENT_LENGTH.get()) {
-			if ( contentLength != null && !ctx.getResponseGZipped()) {
+			Long contentLength = context.getOriginContentLength();
+			if ( contentLength != null && !context.getResponseGZipped()) {
 				if(useServlet31) {
 					servletResponse.setContentLengthLong(contentLength);
 				} else {
