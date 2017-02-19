@@ -1127,6 +1127,18 @@ static class HystrixClientFallbackFactory implements FallbackFactory<HystrixClie
 
 WARNING: There is a limitation with the implementation of fallbacks in Feign and how Hystrix fallbacks work. Fallbacks are currently not supported for methods that return `com.netflix.hystrix.HystrixCommand` and `rx.Observable`.
 
+=== Feign and `@Primary`
+
+When using Feign with Hystrix fallbacks, there are multiple beans in the `ApplicationContext` of the same type. This will cause `@Autowired` to work because there isn't exactly one bean, or one marked as primary. To work around this, Spring Cloud Netflix marks all Feign instances as `@Primary`, so Spring Framework will know which bean to inject. In some cases, this may not be desirable. To turn off this behavior set the `primary` attribute of `@FeignClient` to false.
+
+[source,java,indent=0]
+----
+@FeignClient(name = "hello", primary = false)
+public interface HelloClient {
+	// methods here
+}
+----
+
 [[spring-cloud-feign-inheritance]]
 === Feign Inheritance Support
 
@@ -2386,3 +2398,28 @@ TIP: After executing several requests against your service, you can gather some 
 The Atlas wiki contains a link:https://github.com/Netflix/atlas/wiki/Single-Line[compilation of sample queries] for various scenarios.
 
 Make sure to check out the link:https://github.com/Netflix/atlas/wiki/Alerting-Philosophy[alerting philosophy] and docs on using link:https://github.com/Netflix/atlas/wiki/DES[double exponential smoothing] to generate dynamic alert thresholds.
+
+[[retrying-failed-requests]]
+=== Retrying Failed Requests
+
+Spring Cloud Netflix offers a variety of ways to make HTTP requests.  You can use a load balanced
+`RestTemplate`, Ribbon, or Feign.  No matter how you choose to your HTTP requests, there is always
+a chance the request may fail.  When a request fails you may want to have the request retried
+automatically.  To accomplish this when using Sping Cloud Netflix you need to include
+https://github.com/spring-projects/spring-retry[Spring Retry] on your application's classpath.
+When Spring Retry is present load balanced `RestTemplates`, Feign, and Zuul will automatically
+retry any failed requests (assuming you configuration allows it to).
+
+==== Configuration
+
+Anytime Ribbon is used with Spring Retry you can control the retry functionality by configuring
+certain Ribbon properties.  The properties you can use are
+`client.ribbon.MaxAutoRetries`, `client.ribbon.MaxAutoRetriesNextServer`, and
+`client.ribbon.OkToRetryOnAllOperations`. See the https://github.com/Netflix/ribbon/wiki/Getting-Started#the-properties-file-sample-clientproperties[Ribbon documentation]
+for a description of what there properties do.
+
+==== Zuul
+
+You can turn off Zuul's retry functionality by setting `zuul.retryable` to `false`.  You
+can also disable retry functionality on route by route basis by setting
+`zuul.routes.routename.retryable` to `false`.

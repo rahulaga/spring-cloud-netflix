@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.cloud.client.loadbalancer.LoadBalancedRetryPolicyFactory;
 import org.springframework.cloud.netflix.feign.FeignAutoConfiguration;
@@ -28,7 +29,6 @@ import org.springframework.cloud.netflix.ribbon.SpringClientFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.retry.support.RetryTemplate;
 
 import com.netflix.loadbalancer.ILoadBalancer;
 
@@ -51,17 +51,18 @@ public class FeignRibbonClientAutoConfiguration {
 
 	@Bean
 	@Primary
+	@ConditionalOnMissingClass("org.springframework.retry.support.RetryTemplate")
 	public CachingSpringLoadBalancerFactory cachingLBClientFactory(
-			SpringClientFactory factory, LoadBalancedRetryPolicyFactory retryPolicyFactory,
-			RetryTemplate retryTemplate) {
-		return new CachingSpringLoadBalancerFactory(factory, retryTemplate, retryPolicyFactory);
+			SpringClientFactory factory) {
+		return new CachingSpringLoadBalancerFactory(factory);
 	}
 
 	@Bean
-	public RetryTemplate retryTemplate() {
-		RetryTemplate template = new RetryTemplate();
-		template.setThrowLastExceptionOnExhausted(true);
-		return template;
+	@Primary
+	@ConditionalOnClass(name = "org.springframework.retry.support.RetryTemplate")
+	public CachingSpringLoadBalancerFactory retryabeCachingLBClientFactory(
+			SpringClientFactory factory, LoadBalancedRetryPolicyFactory retryPolicyFactory) {
+		return new CachingSpringLoadBalancerFactory(factory, retryPolicyFactory, true);
 	}
 
 	@Bean
