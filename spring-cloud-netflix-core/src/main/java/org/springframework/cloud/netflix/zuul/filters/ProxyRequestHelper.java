@@ -16,9 +16,6 @@
 
 package org.springframework.cloud.netflix.zuul.filters;
 
-import static org.springframework.http.HttpHeaders.CONTENT_ENCODING;
-import static org.springframework.http.HttpHeaders.CONTENT_LENGTH;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Collection;
@@ -34,6 +31,8 @@ import java.util.Set;
 
 import javax.servlet.http.HttpServletRequest;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.netflix.zuul.util.RequestUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.util.LinkedMultiValueMap;
@@ -45,15 +44,18 @@ import org.springframework.web.util.WebUtils;
 import com.netflix.zuul.context.RequestContext;
 import com.netflix.zuul.util.HTTPRequestUtils;
 
-import lombok.extern.apachecommons.CommonsLog;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.REQUEST_URI_KEY;
+import static org.springframework.http.HttpHeaders.CONTENT_ENCODING;
+import static org.springframework.http.HttpHeaders.CONTENT_LENGTH;
 
 /**
  * @author Dave Syer
  * @author Marcos Barbero
  * @author Spencer Gibb
  */
-@CommonsLog
 public class ProxyRequestHelper {
+
+	private static final Log log = LogFactory.getLog(ProxyRequestHelper.class);
 
 	/**
 	 * Zuul context key for a collection of ignored headers for the current request.
@@ -88,7 +90,7 @@ public class ProxyRequestHelper {
 	public String buildZuulRequestURI(HttpServletRequest request) {
 		RequestContext context = RequestContext.getCurrentContext();
 		String uri = request.getRequestURI();
-		String contextURI = (String) context.get("requestURI");
+		String contextURI = (String) context.get(REQUEST_URI_KEY);
 		if (contextURI != null) {
 			try {
 				uri = UriUtils.encodePath(contextURI, characterEncoding(request));

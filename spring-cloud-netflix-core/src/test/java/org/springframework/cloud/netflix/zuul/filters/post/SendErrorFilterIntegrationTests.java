@@ -19,9 +19,16 @@ package org.springframework.cloud.netflix.zuul.filters.post;
 
 import javax.servlet.http.HttpServletRequest;
 
+import com.netflix.loadbalancer.Server;
+import com.netflix.loadbalancer.ServerList;
+import com.netflix.zuul.ZuulFilter;
+import com.netflix.zuul.context.RequestContext;
+
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.context.embedded.LocalServerPort;
@@ -38,21 +45,17 @@ import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.netflix.loadbalancer.Server;
-import com.netflix.loadbalancer.ServerList;
-import com.netflix.zuul.ZuulFilter;
-import com.netflix.zuul.context.RequestContext;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.POST_TYPE;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.PRE_TYPE;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.ROUTE_TYPE;
 
 /**
  * @author Spencer Gibb
  */
 @RunWith(SpringRunner.class)
-@SpringBootTest(classes = SendErrorFilterIntegrationTests.Config.class,
-		properties = "zuul.routes.filtertest:/filtertest/**",
-		webEnvironment = RANDOM_PORT)
+@SpringBootTest(classes = SendErrorFilterIntegrationTests.Config.class, properties = "zuul.routes.filtertest:/filtertest/**", webEnvironment = RANDOM_PORT)
 @DirtiesContext
 public class SendErrorFilterIntegrationTests {
 
@@ -65,24 +68,32 @@ public class SendErrorFilterIntegrationTests {
 		RequestContext.testSetCurrentContext(context);
 	}
 
+	@After
+	public void clear() {
+		RequestContext.getCurrentContext().clear();
+	}
+
 	@Test
 	public void testPreFails() {
 		String url = "http://localhost:" + port + "/filtertest/get?failpre=true";
-		ResponseEntity<String> response = new TestRestTemplate().getForEntity(url, String.class);
+		ResponseEntity<String> response = new TestRestTemplate().getForEntity(url,
+				String.class);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
 	}
 
 	@Test
 	public void testRouteFails() {
 		String url = "http://localhost:" + port + "/filtertest/get?failroute=true";
-		ResponseEntity<String> response = new TestRestTemplate().getForEntity(url, String.class);
+		ResponseEntity<String> response = new TestRestTemplate().getForEntity(url,
+				String.class);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
 	}
 
 	@Test
 	public void testPostFails() {
 		String url = "http://localhost:" + port + "/filtertest/get?failpost=true";
-		ResponseEntity<String> response = new TestRestTemplate().getForEntity(url, String.class);
+		ResponseEntity<String> response = new TestRestTemplate().getForEntity(url,
+				String.class);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
 	}
 
@@ -103,7 +114,7 @@ public class SendErrorFilterIntegrationTests {
 			return new FailureFilter() {
 				@Override
 				public String filterType() {
-					return "pre";
+					return PRE_TYPE;
 				}
 			};
 		}
@@ -113,7 +124,7 @@ public class SendErrorFilterIntegrationTests {
 			return new FailureFilter() {
 				@Override
 				public String filterType() {
-					return "route";
+					return ROUTE_TYPE;
 				}
 			};
 		}
@@ -123,7 +134,7 @@ public class SendErrorFilterIntegrationTests {
 			return new FailureFilter() {
 				@Override
 				public String filterType() {
-					return "post";
+					return POST_TYPE;
 				}
 			};
 		}
@@ -149,13 +160,13 @@ public class SendErrorFilterIntegrationTests {
 		@Override
 		public boolean shouldFilter() {
 			HttpServletRequest request = RequestContext.getCurrentContext().getRequest();
-			return request.getParameter("fail"+filterType()) != null;
+			return request.getParameter("fail" + filterType()) != null;
 		}
 
 		@Override
 		public Object run() {
 			HttpServletRequest request = RequestContext.getCurrentContext().getRequest();
-			if (request.getParameter("fail"+filterType()) != null) {
+			if (request.getParameter("fail" + filterType()) != null) {
 				throw new RuntimeException("failing on purpose in " + filterType());
 			}
 			return null;

@@ -18,56 +18,46 @@ package org.springframework.cloud.netflix.zuul;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.actuate.endpoint.Endpoint;
-import org.springframework.boot.actuate.endpoint.mvc.MvcEndpoint;
+import org.springframework.boot.actuate.endpoint.AbstractEndpoint;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.cloud.netflix.zuul.filters.Route;
 import org.springframework.cloud.netflix.zuul.filters.RouteLocator;
 import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.jmx.export.annotation.ManagedAttribute;
-import org.springframework.jmx.export.annotation.ManagedOperation;
 import org.springframework.jmx.export.annotation.ManagedResource;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.ResponseBody;
 
 /**
- * Endpoint to display and reset the zuul proxy routes
+ * Endpoint to display the zuul proxy routes
  *
  * @author Spencer Gibb
  * @author Dave Syer
+ * @author Ryan Baxter
+ * @author Gregor Zurowski
  */
-@ManagedResource(description = "Can be used to list and reset the reverse proxy routes")
-public class RoutesEndpoint implements MvcEndpoint, ApplicationEventPublisherAware {
+@ManagedResource(description = "Can be used to list the reverse proxy routes")
+@ConfigurationProperties(prefix = "endpoints.routes")
+public class RoutesEndpoint extends AbstractEndpoint<Map<String, String>> {
+
+	private static final String ID = "routes";
 
 	private RouteLocator routes;
 
 	private ApplicationEventPublisher publisher;
 
-	@Override
-	public void setApplicationEventPublisher(ApplicationEventPublisher publisher) {
-		this.publisher = publisher;
-	}
-
 	@Autowired
 	public RoutesEndpoint(RouteLocator routes) {
+		super(ID, true);
 		this.routes = routes;
 	}
 
-	@RequestMapping(method = RequestMethod.POST)
-	@ResponseBody
-	@ManagedOperation
-	public Map<String, String> reset() {
-		this.publisher.publishEvent(new RoutesRefreshedEvent(this.routes));
-		return getRoutes();
-	}
-
-	@RequestMapping(method = RequestMethod.GET)
-	@ResponseBody
 	@ManagedAttribute
-	public Map<String, String> getRoutes() {
+	public Map<String, String> invoke() {
 		Map<String, String> map = new LinkedHashMap<>();
 		for (Route route : this.routes.getRoutes()) {
 			map.put(route.getFullPath(), route.getLocation());
@@ -75,19 +65,111 @@ public class RoutesEndpoint implements MvcEndpoint, ApplicationEventPublisherAwa
 		return map;
 	}
 
-	@Override
-	public String getPath() {
-		return "/routes";
+	Map<String, RouteDetails> invokeRouteDetails() {
+		Map<String, RouteDetails> map = new LinkedHashMap<>();
+		for (Route route : this.routes.getRoutes()) {
+			map.put(route.getFullPath(), new RouteDetails(route));
+		}
+		return map;
 	}
 
-	@Override
-	public boolean isSensitive() {
-		return true;
-	}
+	/**
+	 * Container for exposing Zuul {@link Route} details as JSON.
+	 */
+	@JsonPropertyOrder({ "id", "fullPath", "location" })
+	@JsonInclude(JsonInclude.Include.NON_EMPTY)
+	public static class RouteDetails {
 
-	@Override
-	public Class<? extends Endpoint<?>> getEndpointType() {
-		return null;
+		private String id;
+
+		private String fullPath;
+
+		private String path;
+
+		private String location;
+
+		private String prefix;
+
+		private Boolean retryable;
+
+		private Set<String> sensitiveHeaders;
+
+		private boolean customSensitiveHeaders;
+
+		private boolean prefixStripped;
+
+		public RouteDetails() {
+		}
+
+		RouteDetails(final Route route) {
+			this.id = route.getId();
+			this.fullPath = route.getFullPath();
+			this.path = route.getPath();
+			this.location = route.getLocation();
+			this.prefix = route.getPrefix();
+			this.retryable = route.getRetryable();
+			this.sensitiveHeaders = route.getSensitiveHeaders();
+			this.customSensitiveHeaders = route.isCustomSensitiveHeaders();
+			this.prefixStripped = route.isPrefixStripped();
+		}
+
+		public String getId() {
+			return id;
+		}
+
+		public String getFullPath() {
+			return fullPath;
+		}
+
+		public String getPath() {
+			return path;
+		}
+
+		public String getLocation() {
+			return location;
+		}
+
+		public String getPrefix() {
+			return prefix;
+		}
+
+		public Boolean getRetryable() {
+			return retryable;
+		}
+
+		public Set<String> getSensitiveHeaders() {
+			return sensitiveHeaders;
+		}
+
+		public boolean isCustomSensitiveHeaders() {
+			return customSensitiveHeaders;
+		}
+
+		public boolean isPrefixStripped() {
+			return prefixStripped;
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+			RouteDetails that = (RouteDetails) o;
+			return Objects.equals(id, that.id) &&
+					Objects.equals(fullPath, that.fullPath) &&
+					Objects.equals(path, that.path) &&
+					Objects.equals(location, that.location) &&
+					Objects.equals(prefix, that.prefix) &&
+					Objects.equals(retryable, that.retryable) &&
+					Objects.equals(sensitiveHeaders, that.sensitiveHeaders) &&
+					customSensitiveHeaders == that.customSensitiveHeaders &&
+					prefixStripped == that.prefixStripped;
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(id, fullPath, path, location, prefix, retryable,
+					sensitiveHeaders, customSensitiveHeaders, prefixStripped);
+		}
 	}
 
 }

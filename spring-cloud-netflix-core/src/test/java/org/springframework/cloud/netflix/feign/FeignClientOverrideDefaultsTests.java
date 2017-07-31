@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2015 the original author or authors.
+ * Copyright 2013-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import static org.junit.Assert.assertNull;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.PropertyPlaceholderAutoConfiguration;
+import org.springframework.boot.autoconfigure.context.PropertyPlaceholderAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.netflix.archaius.ArchaiusAutoConfiguration;
 import org.springframework.cloud.netflix.feign.support.ResponseEntityDecoder;
@@ -121,8 +121,8 @@ public class FeignClientOverrideDefaultsTests {
 
 	@Test
 	public void overrideBuilder() {
-		Feign.Builder.class.cast(this.context.getInstance("foo", Feign.Builder.class));
-		HystrixFeign.Builder.class
+		HystrixFeign.Builder.class.cast(this.context.getInstance("foo", Feign.Builder.class));
+		Feign.Builder.class
 				.cast(this.context.getInstance("bar", Feign.Builder.class));
 	}
 
@@ -187,7 +187,7 @@ public class FeignClientOverrideDefaultsTests {
 
 		@Bean
 		public Feign.Builder feignBuilder() {
-			return Feign.builder();
+			return HystrixFeign.builder();
 		}
 	}
 

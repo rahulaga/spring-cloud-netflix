@@ -1,10 +1,15 @@
 package org.springframework.cloud.netflix.zuul;
 
-import static org.junit.Assert.assertEquals;
+import com.netflix.loadbalancer.Server;
+import com.netflix.loadbalancer.ServerList;
+import com.netflix.zuul.ZuulFilter;
+import com.netflix.zuul.context.RequestContext;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.context.embedded.LocalServerPort;
@@ -31,19 +36,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.netflix.loadbalancer.Server;
-import com.netflix.loadbalancer.ServerList;
-import com.netflix.zuul.ZuulFilter;
-import com.netflix.zuul.context.RequestContext;
+import static org.junit.Assert.assertEquals;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.PRE_TYPE;
 
 @RunWith(SpringJUnit4ClassRunner.class)
-@SpringBootTest(
-		classes = RetryableZuulProxyApplication.class,
-		webEnvironment = WebEnvironment.RANDOM_PORT,
-		value = {
-				"zuul.routes.simple.path: /simple/**",
-				"zuul.routes.simple.retryable: true",
-				"ribbon.OkToRetryOnAllOperations: true"})
+@SpringBootTest(classes = RetryableZuulProxyApplication.class, webEnvironment = WebEnvironment.RANDOM_PORT, value = {
+		"zuul.routes.simple.path: /simple/**", "zuul.routes.simple.retryable: true",
+		"ribbon.OkToRetryOnAllOperations: true",
+		"simple.ribbon.retryableStatusCodes: 404" })
 @DirtiesContext
 public class RetryableZuulProxyApplicationTests {
 
@@ -64,15 +64,19 @@ public class RetryableZuulProxyApplicationTests {
 		RequestContext.testSetCurrentContext(context);
 	}
 
+	@After
+	public void clear() {
+		RequestContext.getCurrentContext().clear();
+	}
+
 	@Test
 	public void postWithForm() {
 		MultiValueMap<String, String> form = new LinkedMultiValueMap<String, String>();
 		form.set("foo", "bar");
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-		ResponseEntity<String> result = testRestTemplate.exchange(
-				"/simple", HttpMethod.POST,
-				new HttpEntity<>(form, headers), String.class);
+		ResponseEntity<String> result = testRestTemplate.exchange("/simple/poster",
+				HttpMethod.POST, new HttpEntity<>(form, headers), String.class);
 		assertEquals(HttpStatus.OK, result.getStatusCode());
 		assertEquals("Posted! {foo=[bar]}", result.getBody());
 	}
@@ -87,7 +91,7 @@ public class RetryableZuulProxyApplicationTests {
 @RibbonClient(name = "simple", configuration = RetryableRibbonClientConfiguration.class)
 class RetryableZuulProxyApplication {
 
-	@RequestMapping(value = "/", method = RequestMethod.POST)
+	@RequestMapping(value = "/poster", method = RequestMethod.POST)
 	public String delete(@RequestBody MultiValueMap<String, String> form) {
 		return "Posted! " + form;
 	}
@@ -97,7 +101,7 @@ class RetryableZuulProxyApplication {
 		return new ZuulFilter() {
 			@Override
 			public String filterType() {
-				return "pre";
+				return PRE_TYPE;
 			}
 
 			@Override

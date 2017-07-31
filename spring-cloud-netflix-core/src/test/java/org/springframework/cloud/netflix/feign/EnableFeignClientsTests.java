@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2015 the original author or authors.
+ * Copyright 2013-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package org.springframework.cloud.netflix.feign;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.PropertyPlaceholderAutoConfiguration;
+import org.springframework.boot.autoconfigure.context.PropertyPlaceholderAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.netflix.archaius.ArchaiusAutoConfiguration;
 import org.springframework.cloud.netflix.feign.support.ResponseEntityDecoder;
@@ -35,7 +35,6 @@ import feign.Feign;
 import feign.Logger;
 import feign.codec.Decoder;
 import feign.codec.Encoder;
-import feign.hystrix.HystrixFeign;
 import feign.slf4j.Slf4jLogger;
 
 /**
@@ -73,7 +72,7 @@ public class EnableFeignClientsTests {
 
 	@Test
 	public void builderDefaultCorrect() {
-		HystrixFeign.Builder.class
+		Feign.Builder.class
 				.cast(this.feignContext.getInstance("foo", Feign.Builder.class));
 	}
 

@@ -19,9 +19,13 @@ package org.springframework.cloud.netflix.zuul.filters;
 import java.io.IOException;
 import java.util.List;
 
+import com.netflix.zuul.context.RequestContext;
+
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
+
 import org.springframework.boot.actuate.trace.InMemoryTraceRepository;
 import org.springframework.boot.actuate.trace.Trace;
 import org.springframework.boot.actuate.trace.TraceRepository;
@@ -32,8 +36,6 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 
-import com.netflix.zuul.context.RequestContext;
-
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.hasSize;
@@ -43,6 +45,7 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.MockitoAnnotations.initMocks;
+import static org.springframework.cloud.netflix.zuul.filters.support.FilterConstants.REQUEST_URI_KEY;
 
 /**
  * @author Spencer Gibb
@@ -61,6 +64,11 @@ public class ProxyRequestHelperTests {
 	public void setTestRequestcontext() {
 		RequestContext context = new RequestContext();
 		RequestContext.testSetCurrentContext(context);
+	}
+
+	@After
+	public void clear() {
+		RequestContext.getCurrentContext().clear();
 	}
 
 	@Test
@@ -290,7 +298,7 @@ public class ProxyRequestHelperTests {
 		request.setCharacterEncoding("UTF-8");
 		final RequestContext context = RequestContext.getCurrentContext();
 		context.setRequest(request);
-		context.set("requestURI", decodedURI);
+		context.set(REQUEST_URI_KEY, decodedURI);
 
 		final String requestURI = new ProxyRequestHelper().buildZuulRequestURI(request);
 		assertThat(requestURI, equalTo(encodedURI));
@@ -304,7 +312,7 @@ public class ProxyRequestHelperTests {
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", encodedURI);
 		final RequestContext context = RequestContext.getCurrentContext();
 		context.setRequest(request);
-		context.set("requestURI", decodedURI);
+		context.set(REQUEST_URI_KEY, decodedURI);
 
 		final String requestURI = new ProxyRequestHelper().buildZuulRequestURI(request);
 		assertThat(requestURI, equalTo(encodedURI));
@@ -318,7 +326,7 @@ public class ProxyRequestHelperTests {
 		request.setCharacterEncoding("UTF-8");
 
 		RequestContext context = RequestContext.getCurrentContext();
-		context.set("requestURI", requestURI);
+		context.set(REQUEST_URI_KEY, requestURI);
 
 		ProxyRequestHelper helper = new ProxyRequestHelper();
 
@@ -334,7 +342,7 @@ public class ProxyRequestHelperTests {
 		MockHttpServletRequest request = new MockHttpServletRequest("GET", requestURI);
 
 		RequestContext context = RequestContext.getCurrentContext();
-		context.set("requestURI", requestURI);
+		context.set(REQUEST_URI_KEY, requestURI);
 
 		ProxyRequestHelper helper = new ProxyRequestHelper();
 

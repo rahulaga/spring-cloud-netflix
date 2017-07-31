@@ -1,20 +1,36 @@
-package org.springframework.cloud.netflix.zuul.filters;
+/*
+ * Copyright 2016-2017 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-import static junit.framework.TestCase.assertFalse;
-import static junit.framework.TestCase.assertTrue;
-import static org.junit.Assert.assertEquals;
+package org.springframework.cloud.netflix.zuul.filters;
 
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
+
+import com.netflix.zuul.context.RequestContext;
 
 import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.impl.client.BasicCookieStore;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.SpringApplication;
@@ -23,8 +39,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.cloud.netflix.zuul.EnableZuulProxy;
-import org.springframework.cloud.netflix.zuul.RoutesEndpoint;
-import org.springframework.cloud.netflix.zuul.ZuulProxyConfiguration;
+import org.springframework.cloud.netflix.zuul.RoutesMvcEndpoint;
 import org.springframework.cloud.netflix.zuul.filters.discovery.DiscoveryClientRouteLocator;
 import org.springframework.cloud.netflix.zuul.filters.route.SimpleHostRoutingFilter;
 import org.springframework.context.annotation.Bean;
@@ -44,7 +59,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
-import com.netflix.zuul.context.RequestContext;
+import static junit.framework.TestCase.assertFalse;
+import static junit.framework.TestCase.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringBootTest(classes = SampleCustomZuulProxyApplication.class, webEnvironment = WebEnvironment.RANDOM_PORT, value = {
@@ -59,12 +76,17 @@ public class CustomHostRoutingFilterTests {
 	private DiscoveryClientRouteLocator routes;
 
 	@Autowired
-	private RoutesEndpoint endpoint;
+	private RoutesMvcEndpoint endpoint;
 
 	@Before
 	public void setTestRequestcontext() {
 		RequestContext context = new RequestContext();
 		RequestContext.testSetCurrentContext(context);
+	}
+
+	@After
+	public void clear() {
+		RequestContext.getCurrentContext().clear();
 	}
 
 	@Test
@@ -186,10 +208,9 @@ class SampleCustomZuulProxyApplication {
 
 	@Configuration
 	@EnableZuulProxy
-	protected static class CustomZuulProxyConfig extends ZuulProxyConfiguration {
+	protected static class CustomZuulProxyConfig {
 
 		@Bean
-		@Override
 		public SimpleHostRoutingFilter simpleHostRoutingFilter(ProxyRequestHelper helper,
 				ZuulProperties zuulProperties) {
 			return new CustomHostRoutingFilter(helper, zuulProperties);

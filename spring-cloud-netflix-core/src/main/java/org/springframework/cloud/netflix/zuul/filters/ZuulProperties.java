@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2015 the original author or authors.
+ * Copyright 2013-2017 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static com.netflix.hystrix.HystrixCommandProperties.ExecutionIsolationStrategy.SEMAPHORE;
 
@@ -40,6 +41,7 @@ import static com.netflix.hystrix.HystrixCommandProperties.ExecutionIsolationStr
  * @author Spencer Gibb
  * @author Dave Syer
  * @author Mathias Düsterhöft
+ * @author Bilal Alp
  */
 @Data
 @ConfigurationProperties("zuul")
@@ -158,6 +160,8 @@ public class ZuulProperties {
 	private ExecutionIsolationStrategy ribbonIsolationStrategy = SEMAPHORE;
 	
 	private HystrixSemaphore semaphore = new HystrixSemaphore();
+
+	private HystrixThreadPool threadPool = new HystrixThreadPool();
 	
 	public Set<String> getIgnoredHeaders() {
 		Set<String> ignoredHeaders = new LinkedHashSet<>(this.ignoredHeaders);
@@ -300,7 +304,8 @@ public class ZuulProperties {
 
 		public Route getRoute(String prefix) {
 			return new Route(this.id, this.path, getLocation(), prefix, this.retryable,
-					isCustomSensitiveHeaders() ? this.sensitiveHeaders : null);
+					isCustomSensitiveHeaders() ? this.sensitiveHeaders : null,
+					this.stripPrefix);
 		}
 
 		public void setSensitiveHeaders(Set<String> headers) {
@@ -326,6 +331,22 @@ public class ZuulProperties {
 		 * The maximum number of connections that can be used by a single route.
 		 */
 		private int maxPerRouteConnections = 20;
+		/**
+		 * The socket timeout in millis. Defaults to 10000.
+		 */
+		private int socketTimeoutMillis = 10000;
+		/**
+		 * The connection timeout in millis. Defaults to 2000.
+		 */
+		private int connectTimeoutMillis = 2000;
+		/**
+		 * The lifetime for the connection pool.
+		 */
+		private long timeToLive = -1;
+		/**
+		 * The time unit for timeToLive.
+		 */
+		private TimeUnit timeUnit = TimeUnit.MILLISECONDS;
 	}
 	
 	@Data
@@ -337,6 +358,39 @@ public class ZuulProperties {
 		 */
 		private int maxSemaphores = 100;
 		
+	}
+
+	public static class HystrixThreadPool {
+		/**
+		 * Flag to determine whether RibbonCommands should use separate thread pools for hystrix.
+		 * By setting to true, RibbonCommands will be executed in a hystrix's thread pool that it is associated with.
+		 * Each RibbonCommand will be associated with a thread pool according to its commandKey (serviceId).
+		 * As default, all commands will be executed in a single thread pool whose threadPoolKey is "RibbonCommand".
+		 * This property is only applicable when using THREAD as ribbonIsolationStrategy
+		 */
+		private boolean useSeparateThreadPools = false;
+
+		/**
+		 * A prefix for HystrixThreadPoolKey of hystrix's thread pool that is allocated to each service Id.
+		 * This property is only applicable when using THREAD as ribbonIsolationStrategy and useSeparateThreadPools = true
+		 */
+		private String threadPoolKeyPrefix = "";
+
+		public boolean isUseSeparateThreadPools() {
+			return useSeparateThreadPools;
+		}
+
+		public void setUseSeparateThreadPools(boolean useSeparateThreadPools) {
+			this.useSeparateThreadPools = useSeparateThreadPools;
+		}
+
+		public String getThreadPoolKeyPrefix() {
+			return threadPoolKeyPrefix;
+		}
+
+		public void setThreadPoolKeyPrefix(String threadPoolKeyPrefix) {
+			this.threadPoolKeyPrefix = threadPoolKeyPrefix;
+		}
 	}
 
 	public String getServletPattern() {

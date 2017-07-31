@@ -62,6 +62,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -97,7 +98,8 @@ import rx.Single;
 @SpringBootTest(classes = FeignClientTests.Application.class, webEnvironment = WebEnvironment.RANDOM_PORT, value = {
 		"spring.application.name=feignclienttest",
 		"logging.level.org.springframework.cloud.netflix.feign.valid=DEBUG",
-		"feign.httpclient.enabled=false", "feign.okhttp.enabled=false" })
+		"feign.httpclient.enabled=false", "feign.okhttp.enabled=false",
+        "feign.hystrix.enabled=true"})
 @DirtiesContext
 public class FeignClientTests {
 
@@ -454,8 +456,11 @@ public class FeignClientTests {
 		}
 
 		@RequestMapping(method = RequestMethod.POST, consumes = "application/vnd.io.spring.cloud.test.v1+json", produces = "application/vnd.io.spring.cloud.test.v1+json", path = "/complex")
-		String complex(String body) {
-			return "{\"value\":\"OK\"}";
+		String complex(@RequestBody String body, @RequestHeader("Content-Length") int contentLength) {
+			if (contentLength <= 0) {
+				throw new IllegalArgumentException("Invalid Content-Length "+ contentLength);
+			}
+			return body;
 		}
 
 		@RequestMapping(method = RequestMethod.GET, path = "/tostring")

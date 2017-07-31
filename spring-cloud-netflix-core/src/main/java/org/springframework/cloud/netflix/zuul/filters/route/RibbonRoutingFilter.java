@@ -68,9 +68,9 @@ public class RibbonRoutingFilter extends ZuulFilter {
 		this.helper = helper;
 		this.ribbonCommandFactory = ribbonCommandFactory;
 		this.requestCustomizers = requestCustomizers;
-		// To support Servlet API 3.0.1 we need to check if getcontentLengthLong exists
+		// To support Servlet API 3.1 we need to check if getContentLengthLong exists
 		try {
-			HttpServletResponse.class.getMethod("getContentLengthLong");
+			HttpServletRequest.class.getMethod("getContentLengthLong");
 		} catch(NoSuchMethodException e) {
 			useServlet31 = false;
 		}
@@ -124,7 +124,7 @@ public class RibbonRoutingFilter extends ZuulFilter {
 				.buildZuulRequestQueryParams(request);
 		String verb = getVerb(request);
 		InputStream requestEntity = getRequestBody(request);
-		if (request.getContentLength() < 0) {
+		if (request.getContentLength() < 0 && !verb.equalsIgnoreCase("GET")) {
 			context.setChunkedRequestBody();
 		}
 

@@ -19,76 +19,77 @@ package org.springframework.cloud.netflix.zuul;
 import java.lang.reflect.Field;
 import java.util.Map;
 
-import javax.servlet.ServletContextEvent;
-import javax.servlet.ServletContextListener;
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 
-import lombok.extern.apachecommons.CommonsLog;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.springframework.util.ReflectionUtils;
 
 import com.netflix.zuul.FilterLoader;
 import com.netflix.zuul.ZuulFilter;
 import com.netflix.zuul.filters.FilterRegistry;
-import com.netflix.zuul.monitoring.MonitoringHelper;
+import com.netflix.zuul.monitoring.CounterFactory;
+import com.netflix.zuul.monitoring.TracerFactory;
 
 /**
+ * Initializes various Zuul components including {@link ZuulFilter}.
+ *
  * @author Spencer Gibb
  *
- * TODO: .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
  */
-@CommonsLog
-public class ZuulFilterInitializer implements ServletContextListener {
+public class ZuulFilterInitializer {
 
-	private Map<String, ZuulFilter> filters;
+	private static final Log log = LogFactory.getLog(ZuulFilterInitializer.class);
 
-	public ZuulFilterInitializer(Map<String, ZuulFilter> filters) {
+	private final Map<String, ZuulFilter> filters;
+	private final CounterFactory counterFactory;
+	private final TracerFactory tracerFactory;
+	private final FilterLoader filterLoader;
+	private final FilterRegistry filterRegistry;
+
+	public ZuulFilterInitializer(Map<String, ZuulFilter> filters,
+								 CounterFactory counterFactory,
+								 TracerFactory tracerFactory,
+								 FilterLoader filterLoader,
+								 FilterRegistry filterRegistry) {
 		this.filters = filters;
+		this.counterFactory = counterFactory;
+		this.tracerFactory = tracerFactory;
+		this.filterLoader = filterLoader;
+		this.filterRegistry = filterRegistry;
 	}
 
-	@Override
-	public void contextInitialized(ServletContextEvent sce) {
+	@PostConstruct
+	public void contextInitialized() {
+		log.info("Starting filter initializer");
 
-		log.info("Starting filter initializer context listener");
-
-		// FIXME: mocks monitoring infrastructure as we don't need it for this simple app
-		MonitoringHelper.initMocks();
-
-		FilterRegistry registry = FilterRegistry.instance();
+		TracerFactory.initialize(tracerFactory);
+		CounterFactory.initialize(counterFactory);
 
 		for (Map.Entry<String, ZuulFilter> entry : this.filters.entrySet()) {
-			registry.put(entry.getKey(), entry.getValue());
+			filterRegistry.put(entry.getKey(), entry.getValue());
 		}
 	}
 
-	@Override
-	public void contextDestroyed(ServletContextEvent sce) {
-		log.info("Stopping filter initializer context listener");
-		FilterRegistry registry = FilterRegistry.instance();
+	@PreDestroy
+	public void contextDestroyed() {
+		log.info("Stopping filter initializer");
 		for (Map.Entry<String, ZuulFilter> entry : this.filters.entrySet()) {
-			registry.remove(entry.getKey());
+			filterRegistry.remove(entry.getKey());
 		}
 		clearLoaderCache();
+
+		TracerFactory.initialize(null);
+		CounterFactory.initialize(null);
 	}
 
 	private void clearLoaderCache() {
-		FilterLoader instance = FilterLoader.getInstance();
 		Field field = ReflectionUtils.findField(FilterLoader.class, "hashFiltersByType");
 		ReflectionUtils.makeAccessible(field);
 		@SuppressWarnings("rawtypes")
-		Map cache = (Map) ReflectionUtils.getField(field, instance);
+		Map cache = (Map) ReflectionUtils.getField(field, filterLoader);
 		cache.clear();
 	}
 
-	/*
-	 * private void initGroovyFilterManager() {
-	 * 
-	 * //TODO: support groovy filters loaded from filesystem in proxy
-	 * FilterLoader.getInstance().setCompiler(new GroovyCompiler());
-	 * 
-	 * final String scriptRoot = props.getFilterRoot();
-	 * log.info("Using file system script: " + scriptRoot);
-	 * 
-	 * try { FilterFileManager.setFilenameFilter(new GroovyFileFilter());
-	 * FilterFileManager.init(5, scriptRoot + "/pre", scriptRoot + "/route", scriptRoot +
-	 * "/post" ); } catch (Exception e) { throw new RuntimeException(e); } }
-	 */
 }

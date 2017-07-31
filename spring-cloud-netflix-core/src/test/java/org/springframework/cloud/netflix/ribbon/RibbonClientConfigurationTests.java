@@ -20,24 +20,26 @@ import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
 
-import com.netflix.client.AbstractLoadBalancerAwareClient;
-import com.netflix.niws.client.http.RestClient;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.beans.factory.BeanFactoryUtils;
 import org.springframework.beans.factory.ListableBeanFactory;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.util.EnvironmentTestUtils;
 import org.springframework.cloud.netflix.ribbon.RibbonClientConfiguration.OverrideRestClient;
+import org.springframework.cloud.netflix.ribbon.apache.RibbonLoadBalancingHttpClient;
+import org.springframework.cloud.netflix.ribbon.okhttp.OkHttpLoadBalancingClient;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Configuration;
 
+import com.netflix.client.AbstractLoadBalancerAwareClient;
 import com.netflix.client.config.CommonClientConfigKey;
 import com.netflix.client.config.DefaultClientConfigImpl;
 import com.netflix.client.config.IClientConfig;
 import com.netflix.loadbalancer.Server;
-import org.springframework.cloud.netflix.ribbon.apache.RibbonLoadBalancingHttpClient;
-import org.springframework.cloud.netflix.ribbon.okhttp.OkHttpLoadBalancingClient;
-import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import com.netflix.niws.client.http.RestClient;
 
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
@@ -146,18 +148,21 @@ public class RibbonClientConfigurationTests {
 		return clients;
 	}
 
+	@SuppressWarnings("deprecation")
 	@Test
 	public void testDefaultsToApacheHttpClient() {
 		testClient(RibbonLoadBalancingHttpClient.class, null, RestClient.class, OkHttpLoadBalancingClient.class);
 		testClient(RibbonLoadBalancingHttpClient.class, "ribbon.httpclient.enabled", RestClient.class, OkHttpLoadBalancingClient.class);
 	}
 
+	@SuppressWarnings("deprecation")
 	@Test
 	public void testEnableRestClient() {
 		testClient(RestClient.class, "ribbon.restclient.enabled", RibbonLoadBalancingHttpClient.class,
 				OkHttpLoadBalancingClient.class);
 	}
 
+	@SuppressWarnings("deprecation")
 	@Test
 	public void testEnableOkHttpClient() {
 		testClient(OkHttpLoadBalancingClient.class, "ribbon.okhttp.enabled", RibbonLoadBalancingHttpClient.class,
@@ -183,6 +188,10 @@ public class RibbonClientConfigurationTests {
 		return BeanFactoryUtils.beanNamesForTypeIncludingAncestors(lbf,
 				requiredType).length > 0;
 	}
+
+	@Configuration
+	@EnableAutoConfiguration
+	protected static class TestLBConfig { }
 
 	static class TestRestClient extends OverrideRestClient {
 
